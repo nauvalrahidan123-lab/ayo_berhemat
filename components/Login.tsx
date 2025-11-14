@@ -12,17 +12,37 @@ const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Add validation to prevent empty submissions, fixing 'auth/missing-password'
+    if (!username.trim() || !password.trim()) {
+      setError('Username dan password harus diisi.');
+      return;
+    }
+    
     setLoading(true);
 
     // Map username to a dummy email for Firebase Auth
-    const email = `${username.toLowerCase()}@app.com`;
+    const email = `${username.toLowerCase().trim()}@app.com`;
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged in App.tsx will handle the rest
-    } catch (error) {
-      setError('Username atau password salah.');
-      console.error("Firebase login error:", error);
+    } catch (err: any) {
+      console.error("Firebase login error:", err);
+      // Add specific error handling for different auth errors
+      switch (err.code) {
+        case 'auth/configuration-not-found':
+          setError('Konfigurasi Firebase bermasalah. Pastikan Auth diaktifkan.');
+          break;
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          setError('Username atau password salah.');
+          break;
+        default:
+          setError('Terjadi kesalahan saat login. Coba lagi nanti.');
+          break;
+      }
     } finally {
         setLoading(false);
     }
