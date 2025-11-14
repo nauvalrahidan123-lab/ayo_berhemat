@@ -1,51 +1,41 @@
-
 import React, { useState } from 'react';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { USERS } from '../constants';
+import { User } from '../types';
 
-const Login: React.FC = () => {
+interface LoginProps {
+  onLoginSuccess: (user: User) => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    // Add validation to prevent empty submissions, fixing 'auth/missing-password'
+    // Basic validation
     if (!username.trim() || !password.trim()) {
       setError('Username dan password harus diisi.');
+      setLoading(false);
       return;
     }
     
-    setLoading(true);
+    setTimeout(() => {
+        const userAttempt = username.toLowerCase().trim();
+        const userRecord = USERS[userAttempt];
 
-    // Map username to a dummy email for Firebase Auth
-    const email = `${username.toLowerCase().trim()}@app.com`;
-
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged in App.tsx will handle the rest
-    } catch (err: any) {
-      console.error("Firebase login error:", err);
-      // Add specific error handling for different auth errors
-      switch (err.code) {
-        case 'auth/configuration-not-found':
-          setError('Konfigurasi Firebase bermasalah. Pastikan Auth diaktifkan.');
-          break;
-        case 'auth/invalid-credential':
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          setError('Username atau password salah.');
-          break;
-        default:
-          setError('Terjadi kesalahan saat login. Coba lagi nanti.');
-          break;
-      }
-    } finally {
+        if (userRecord && userRecord.password_HACK === password) {
+            const { password_HACK, ...userToLogin } = userRecord;
+            onLoginSuccess(userToLogin);
+        } else {
+            setError('Username atau password salah.');
+        }
         setLoading(false);
-    }
+    }, 500); // Simulate network delay
   };
 
   return (
