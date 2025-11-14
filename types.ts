@@ -2,6 +2,7 @@
 export type UserTheme = 'nauval' | 'mufel';
 
 export interface User {
+  uid: string;
   username: string;
   theme: UserTheme;
 }
@@ -24,7 +25,7 @@ export interface Transaction {
 }
 
 export interface Budget {
-  id: string;
+  id:string;
   category: string;
   amount: number;
   spent: number;

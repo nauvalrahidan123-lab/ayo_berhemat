@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Account, Transaction, Budget, User } from '../types';
 import Card from './common/Card';
 import ProgressBar from './common/ProgressBar';
-import { EyeIcon, EyeOffIcon, ArrowUpIcon, ArrowDownIcon } from './icons';
+import { EyeIcon, EyeOffIcon, ArrowUpIcon, ArrowDownIcon, LogoutIcon } from './icons';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface DashboardProps {
@@ -10,13 +10,14 @@ interface DashboardProps {
   accounts: Account[];
   transactions: Transaction[];
   budgets: Budget[];
+  onLogout: () => void;
 }
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactions, budgets }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactions, budgets, onLogout }) => {
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
 
   const totalBalance = useMemo(() => accounts.reduce((sum, acc) => sum + acc.balance, 0), [accounts]);
@@ -44,9 +45,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactions, bud
   
   return (
     <div className="p-4 space-y-6 animate-fade-in">
-      <header>
-        <p className="text-md text-[var(--text-secondary)]">Selamat datang,</p>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)] capitalize">{user.username}!</h1>
+      <header className="flex justify-between items-center">
+        <div>
+            <p className="text-md text-[var(--text-secondary)]">Selamat datang,</p>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] capitalize">{user.username}!</h1>
+        </div>
+        <button onClick={onLogout} className="p-2 rounded-full text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]" aria-label="Logout">
+            <LogoutIcon className="w-6 h-6" />
+        </button>
       </header>
 
       <Card className="flex flex-col items-center justify-center text-center p-6 shadow-[0_4px_16px_rgba(0,0,0,0.05)]">

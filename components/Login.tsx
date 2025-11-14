@@ -1,30 +1,30 @@
 
 import React, { useState } from 'react';
-import { User } from '../types';
-import { USERS } from '../constants';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
-interface LoginProps {
-  onLogin: (user: User) => void;
-}
-
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    const nauval = USERS.nauval;
-    const mufel = USERS.mufel;
+    setLoading(true);
 
-    if (username === nauval.username && password === nauval.password) {
-      onLogin({ username: nauval.username, theme: nauval.theme });
-    } else if (username === mufel.username && password === mufel.password) {
-      onLogin({ username: mufel.username, theme: mufel.theme });
-    } else {
+    // Map username to a dummy email for Firebase Auth
+    const email = `${username.toLowerCase()}@app.com`;
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged in App.tsx will handle the rest
+    } catch (error) {
       setError('Username atau password salah.');
+      console.error("Firebase login error:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -45,6 +45,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="nauval / mufel"
               autoComplete="username"
+              disabled={loading}
             />
           </div>
           <div>
@@ -57,13 +58,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
               autoComplete="current-password"
+              disabled={loading}
             />
           </div>
           
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">
-            Login
+          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400" disabled={loading}>
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
          <div className="text-xs text-gray-400 mt-6 text-center">

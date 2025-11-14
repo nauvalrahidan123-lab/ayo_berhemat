@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, AppView, Account, Transaction, Budget, UserTheme } from './types';
+import { User, AppView, Account, Transaction, Budget } from './types';
 import { THEMES } from './constants';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -13,35 +13,30 @@ import AccountForm from './components/AccountForm';
 import BudgetForm from './components/BudgetForm';
 import TransferForm from './components/TransferForm';
 
-// --- MOCK DATA ---
-const getMockData = (userTheme: UserTheme) => {
-    const isNauval = userTheme === 'nauval';
-    const accounts: Account[] = [
-        { id: 'acc1', name: 'BNI', balance: isNauval ? 3500000 : 2800000, type: 'Bank' },
-        { id: 'acc2', name: 'GoPay', balance: isNauval ? 750000 : 1200000, type: 'E-Wallet' },
-        { id: 'acc3', name: 'Tunai', balance: isNauval ? 250000 : 400000, type: 'Tunai' },
-    ];
+// --- Firebase Imports ---
+import { auth, db } from './firebase';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import {
+    collection,
+    doc,
+    onSnapshot,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    getDoc,
+    query,
+    orderBy,
+    writeBatch,
+    increment,
+    Timestamp,
+} from 'firebase/firestore';
 
-    const today = new Date();
-    const transactions: Transaction[] = [
-        { id: 't1', type: 'Pemasukan', amount: isNauval ? 2000000 : 1500000, date: new Date(new Date().setDate(today.getDate() - 2)).toISOString(), category: 'Uang Saku', accountId: 'acc1' },
-        { id: 't2', type: 'Pengeluaran', amount: 50000, date: new Date(new Date().setDate(today.getDate() - 1)).toISOString(), category: 'Makanan', accountId: 'acc2' },
-        { id: 't3', type: 'Pengeluaran', amount: 25000, date: new Date().toISOString(), category: 'Transportasi', accountId: 'acc3' },
-         { id: 't4', type: 'Pengeluaran', amount: 125000, date: new Date(new Date().setDate(today.getDate() - 5)).toISOString(), category: 'Belanja', accountId: 'acc2' },
-        { id: 't5', type: 'Pengeluaran', amount: 1500000, date: new Date(new Date().setDate(today.getDate() - 15)).toISOString(), category: 'Biaya Kuliah', accountId: 'acc1' },
-    ];
-
-    const budgets: Budget[] = [
-        { id: 'b1', category: 'Makanan', amount: 800000, spent: transactions.filter(t => t.category === 'Makanan').reduce((s, t) => s + t.amount, 0) },
-        { id: 'b2', category: 'Transportasi', amount: 400000, spent: transactions.filter(t => t.category === 'Transportasi').reduce((s, t) => s + t.amount, 0) },
-        { id: 'b3', category: 'Hiburan', amount: 300000, spent: 150000 },
-    ];
-    
-    return { accounts, transactions, budgets };
-};
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
+    const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
     const [activeView, setActiveView] = useState<AppView>('dashboard');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [viewKey, setViewKey] = useState(0);
@@ -59,28 +54,95 @@ const App: React.FC = () => {
     const [isTransferFormOpen, setIsTransferFormOpen] = useState(false);
 
     useEffect(() => {
-        if (user) {
-            const { accounts, transactions, budgets } = getMockData(user.theme);
-            setAccounts(accounts);
-            setTransactions(transactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-            setBudgets(budgets);
+        const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+            if (fbUser) {
+                setFirebaseUser(fbUser);
+                const userDocRef = doc(db, 'users', fbUser.uid);
+                const userDocSnap = await getDoc(userDocRef);
 
-            const theme = THEMES[user.theme];
-            const root = document.documentElement;
-            Object.entries(theme).forEach(([key, value]) => {
-                root.style.setProperty(key, value);
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
+                    const appUser: User = {
+                        uid: fbUser.uid,
+                        username: userData.username,
+                        theme: userData.theme,
+                    };
+                    setUser(appUser);
+
+                    const theme = THEMES[appUser.theme];
+                    const root = document.documentElement;
+                    Object.entries(theme).forEach(([key, value]) => {
+                        root.style.setProperty(key, value);
+                    });
+                } else {
+                    // Handle case where user exists in Auth but not Firestore, maybe sign them out
+                    console.error("User document not found in Firestore.");
+                    await signOut(auth);
+                }
+            } else {
+                setUser(null);
+                setFirebaseUser(null);
+                setAccounts([]);
+                setTransactions([]);
+                setBudgets([]);
+            }
+            setIsLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // Data fetching effects
+    useEffect(() => {
+        if (!firebaseUser) return;
+        
+        const userDocPath = `users/${firebaseUser.uid}`;
+
+        const unsubAccounts = onSnapshot(collection(db, userDocPath, 'accounts'), (snapshot) => {
+            const fetchedAccounts: Account[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+            setAccounts(fetchedAccounts);
+        });
+
+        const q = query(collection(db, userDocPath, 'transactions'), orderBy('date', 'desc'));
+        const unsubTransactions = onSnapshot(q, (snapshot) => {
+            const fetchedTransactions: Transaction[] = snapshot.docs.map(doc => {
+                 const data = doc.data();
+                 return {
+                    id: doc.id,
+                    ...data,
+                    date: (data.date as Timestamp).toDate().toISOString(),
+                 } as Transaction
             });
-        }
-    }, [user]);
-    
-    const handleLogin = (loggedInUser: User) => {
-        setUser(loggedInUser);
-    };
+            setTransactions(fetchedTransactions);
+        });
+        
+        const unsubBudgets = onSnapshot(collection(db, userDocPath, 'budgets'), (snapshot) => {
+            const fetchedBudgets: Budget[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Budget));
+            setBudgets(fetchedBudgets);
+        });
 
+        return () => {
+            unsubAccounts();
+            unsubTransactions();
+            unsubBudgets();
+        };
+
+    }, [firebaseUser]);
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Error signing out:", error);
+        }
+    };
+    
     const handleViewChange = (view: AppView) => {
         setActiveView(view);
         setViewKey(prev => prev + 1);
     };
+
+    const userPath = `users/${firebaseUser?.uid}`;
     
     // --- Account Logic ---
     const handleOpenAccountForm = (account: Account | null) => {
@@ -88,45 +150,56 @@ const App: React.FC = () => {
         setIsAccountFormOpen(true);
     };
     
-    const handleSaveAccount = useCallback((accountData: Omit<Account, 'id'> | Account) => {
+    const handleSaveAccount = useCallback(async (accountData: Omit<Account, 'id'> | Account) => {
+        if (!firebaseUser) return;
         if ('id' in accountData) { // Editing
-            setAccounts(prev => prev.map(acc => acc.id === accountData.id ? accountData : acc));
+            const { id, ...dataToUpdate } = accountData;
+            await updateDoc(doc(db, userPath, 'accounts', id), dataToUpdate);
         } else { // Adding
-            const newAccount: Account = {
-                ...accountData,
-                id: `acc${Date.now()}`,
-            };
-            setAccounts(prev => [...prev, newAccount]);
+            await addDoc(collection(db, userPath, 'accounts'), accountData);
         }
-    }, []);
+    }, [firebaseUser, userPath]);
 
-    const handleDeleteAccount = useCallback((accountId: string) => {
+    const handleDeleteAccount = useCallback(async (accountId: string) => {
+        if (!firebaseUser) return;
         if (transactions.some(t => t.accountId === accountId)) {
             alert('Gagal Hapus: Akun ini memiliki transaksi terkait.');
             return;
         }
-        setAccounts(prev => prev.filter(acc => acc.id !== accountId));
+        await deleteDoc(doc(db, userPath, 'accounts', accountId));
         setIsAccountFormOpen(false);
-    }, [transactions]);
+    }, [firebaseUser, userPath, transactions]);
 
     // --- Transaction Logic ---
-    const handleSaveTransaction = useCallback((newTransactionData: Omit<Transaction, 'id'>) => {
-        const newTransaction: Transaction = { ...newTransactionData, id: `t${Date.now()}` };
-        setTransactions(prev => [newTransaction, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-        setAccounts(prev => prev.map(acc => {
-            if (acc.id === newTransaction.accountId) {
-                const newBalance = newTransaction.type === 'Pemasukan' ? acc.balance + newTransaction.amount : acc.balance - newTransaction.amount;
-                return { ...acc, balance: newBalance };
-            }
-            return acc;
-        }));
-        setBudgets(prev => prev.map(b => {
-             if (b.category === newTransaction.category && newTransaction.type === 'Pengeluaran') {
-                 return { ...b, spent: b.spent + newTransaction.amount };
+    const handleSaveTransaction = useCallback(async (newTransactionData: Omit<Transaction, 'id'>) => {
+        if (!firebaseUser) return;
+        
+        const batch = writeBatch(db);
+        
+        // 1. Add new transaction
+        const transactionWithTimestamp = {
+            ...newTransactionData,
+            date: Timestamp.fromDate(new Date(newTransactionData.date))
+        };
+        const newTransactionRef = doc(collection(db, userPath, 'transactions'));
+        batch.set(newTransactionRef, transactionWithTimestamp);
+
+        // 2. Update account balance
+        const accountRef = doc(db, userPath, 'accounts', newTransactionData.accountId);
+        const amountChange = newTransactionData.type === 'Pemasukan' ? newTransactionData.amount : -newTransactionData.amount;
+        batch.update(accountRef, { balance: increment(amountChange) });
+        
+        // 3. Update budget spent amount
+        if (newTransactionData.type === 'Pengeluaran') {
+             const budgetToUpdate = budgets.find(b => b.category === newTransactionData.category);
+             if (budgetToUpdate) {
+                 const budgetRef = doc(db, userPath, 'budgets', budgetToUpdate.id);
+                 batch.update(budgetRef, { spent: increment(newTransactionData.amount) });
              }
-             return b;
-        }));
-    }, []);
+        }
+        
+        await batch.commit();
+    }, [firebaseUser, userPath, budgets]);
     
     // --- Budget Logic ---
     const handleOpenBudgetForm = (budget: Budget | null) => {
@@ -134,81 +207,66 @@ const App: React.FC = () => {
         setIsBudgetFormOpen(true);
     };
     
-    const handleSaveBudget = useCallback((budgetData: Omit<Budget, 'id' | 'spent'> | Budget) => {
+    const handleSaveBudget = useCallback(async (budgetData: Omit<Budget, 'id' | 'spent'> | Budget) => {
+        if (!firebaseUser) return;
         if ('id' in budgetData) { // Editing
-            setBudgets(prevBudgets => {
-                const updatedBudgets = prevBudgets.map(b =>
-                    b.id === budgetData.id ? { ...b, category: budgetData.category, amount: budgetData.amount } : b
-                );
-                // Recalculate spent for the edited budget based on its new name
-                return updatedBudgets.map(b => {
-                    if(b.id === budgetData.id) {
-                        const newSpent = transactions
-                            .filter(t => t.type === 'Pengeluaran' && t.category === b.category)
-                            .reduce((s, t) => s + t.amount, 0);
-                        return { ...b, spent: newSpent };
-                    }
-                    return b;
-                });
-            });
+            const { id, category, amount } = budgetData;
+            // Recalculate spent if category name changes (though this form doesn't encourage it)
+            const newSpent = transactions
+                .filter(t => t.type === 'Pengeluaran' && t.category === category)
+                .reduce((s, t) => s + t.amount, 0);
+            await updateDoc(doc(db, userPath, 'budgets', id), { category, amount, spent: newSpent });
+
         } else { // Adding
             const spent = transactions
                 .filter(t => t.type === 'Pengeluaran' && t.category === budgetData.category)
                 .reduce((sum, t) => sum + t.amount, 0);
 
-            const newBudget: Budget = {
-                ...budgetData,
-                id: `b${Date.now()}`,
-                spent: spent,
-            };
-            setBudgets(prev => [...prev, newBudget]);
+            const newBudget = { ...budgetData, spent };
+            await addDoc(collection(db, userPath, 'budgets'), newBudget);
         }
-    }, [transactions]);
+    }, [firebaseUser, userPath, transactions]);
 
 
-    const handleDeleteBudget = useCallback((budgetId: string) => {
-        setBudgets(prev => prev.filter(b => b.id !== budgetId));
+    const handleDeleteBudget = useCallback(async (budgetId: string) => {
+        if (!firebaseUser) return;
+        await deleteDoc(doc(db, userPath, 'budgets', budgetId));
         setIsBudgetFormOpen(false);
-    }, []);
+    }, [firebaseUser, userPath]);
 
     // --- Transfer Logic ---
-    const handleTransfer = useCallback((fromAccountId: string, toAccountId: string, amount: number, date: string) => {
-        const transferOut: Transaction = {
-            id: `t${Date.now()}`,
-            type: 'Pengeluaran',
-            amount,
-            date,
-            category: 'Transfer Keluar',
-            accountId: fromAccountId
-        };
-        const transferIn: Transaction = {
-            id: `t${Date.now()+1}`,
-            type: 'Pemasukan',
-            amount,
-            date,
-            category: 'Transfer Masuk',
-            accountId: toAccountId
-        };
+    const handleTransfer = useCallback(async (fromAccountId: string, toAccountId: string, amount: number, date: string) => {
+        if (!firebaseUser) return;
         
-        setAccounts(prev => prev.map(acc => {
-            if (acc.id === fromAccountId) return { ...acc, balance: acc.balance - amount };
-            if (acc.id === toAccountId) return { ...acc, balance: acc.balance + amount };
-            return acc;
-        }));
-        setTransactions(prev => [transferOut, transferIn, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-        setBudgets(prev => prev.map(b => {
-            if (b.category === transferOut.category) {
-                return { ...b, spent: b.spent + transferOut.amount };
-            }
-            return b;
-        }));
-    }, []);
+        const batch = writeBatch(db);
+        const transactionDate = Timestamp.fromDate(new Date(date));
+
+        // 1. Create transfer out transaction
+        const transferOut: Omit<Transaction, 'id'> = { type: 'Pengeluaran', amount, date, category: 'Transfer Keluar', accountId: fromAccountId };
+        batch.set(doc(collection(db, userPath, 'transactions')), { ...transferOut, date: transactionDate });
+
+        // 2. Create transfer in transaction
+        const transferIn: Omit<Transaction, 'id'> = { type: 'Pemasukan', amount, date, category: 'Transfer Masuk', accountId: toAccountId };
+        batch.set(doc(collection(db, userPath, 'transactions')), { ...transferIn, date: transactionDate });
+        
+        // 3. Update account balances
+        batch.update(doc(db, userPath, 'accounts', fromAccountId), { balance: increment(-amount) });
+        batch.update(doc(db, userPath, 'accounts', toAccountId), { balance: increment(amount) });
+        
+        // 4. Update budget for "Transfer Keluar" if it exists
+        const transferBudget = budgets.find(b => b.category === 'Transfer Keluar');
+        if (transferBudget) {
+            batch.update(doc(db, userPath, 'budgets', transferBudget.id), { spent: increment(amount) });
+        }
+        
+        await batch.commit();
+    }, [firebaseUser, userPath, budgets]);
 
     const renderView = () => {
         if (!user) return null;
         switch (activeView) {
             case 'dashboard':
-                return <Dashboard user={user} accounts={accounts} transactions={transactions} budgets={budgets} />;
+                return <Dashboard user={user} accounts={accounts} transactions={transactions} budgets={budgets} onLogout={handleLogout} />;
             case 'transactions':
                 return <TransactionsList transactions={transactions} accounts={accounts} />;
             case 'budgets':
@@ -218,12 +276,23 @@ const App: React.FC = () => {
             case 'reports':
                  return <Reports transactions={transactions} />;
             default:
-                return <Dashboard user={user} accounts={accounts} transactions={transactions} budgets={budgets} />;
+                return <Dashboard user={user} accounts={accounts} transactions={transactions} budgets={budgets} onLogout={handleLogout} />;
         }
     };
     
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                <div className="text-center">
+                    <p className="text-lg font-semibold">Memuat Data...</p>
+                    <p className="text-gray-500">Silakan tunggu sebentar.</p>
+                </div>
+            </div>
+        );
+    }
+    
     if (!user) {
-        return <Login onLogin={handleLogin} />;
+        return <Login />;
     }
 
     return (

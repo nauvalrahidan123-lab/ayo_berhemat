@@ -1,18 +1,5 @@
 import { UserTheme } from './types';
 
-export const USERS = {
-  nauval: {
-    username: 'nauval',
-    password: '061106',
-    theme: 'nauval' as UserTheme,
-  },
-  mufel: {
-    username: 'mufel',
-    password: '060703',
-    theme: 'mufel' as UserTheme,
-  },
-};
-
 export const THEMES: Record<UserTheme, Record<string, string>> = {
   nauval: {
     '--bg-primary': '#F0F4F8', // cool gray
