@@ -1,0 +1,5 @@
+{
+  "name": "Student Finance Manager",
+  "description": "A minimalist, mobile-first financial management web application for students. It features quick transaction input, simple budgeting, and essential reports with a clean, aesthetic user interface tailored for two distinct user profiles.",
+  "requestFramePermissions": []
+}
