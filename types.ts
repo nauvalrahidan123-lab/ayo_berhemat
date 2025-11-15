@@ -1,7 +1,7 @@
+
 export type UserTheme = 'nauval' | 'mufel';
 
-export interface User {
-  id: string;
+export interface UserProfile {
   username: string;
   theme: UserTheme;
 }

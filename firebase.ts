@@ -1,7 +1,9 @@
+
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// Reverted to hardcoded config to fix local environment variable errors.
 const firebaseConfig = {
   apiKey: "AIzaSyD8k_BbFsFH96GISBhU4pp8m1hQh_9Ujq0",
   authDomain: "ayoberhemat-9820d.firebaseapp.com",
@@ -12,7 +14,6 @@ const firebaseConfig = {
   measurementId: "G-KCE7GZTXXM"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);

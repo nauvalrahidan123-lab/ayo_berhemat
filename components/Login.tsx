@@ -1,41 +1,57 @@
+
 import React, { useState } from 'react';
+import { auth, db } from '../firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  AuthErrorCodes
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { USERS } from '../constants';
-import { User } from '../types';
 
-interface LoginProps {
-  onLoginSuccess: (user: User) => void;
-}
-
-const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Basic validation
-    if (!username.trim() || !password.trim()) {
-      setError('Username dan password harus diisi.');
+    if (!username || !password) {
+      setError('Username and password are required.');
       setLoading(false);
       return;
     }
-    
-    setTimeout(() => {
-        const userAttempt = username.toLowerCase().trim();
-        const userRecord = USERS[userAttempt];
 
-        if (userRecord && userRecord.password_HACK === password) {
-            const { password_HACK, ...userToLogin } = userRecord;
-            onLoginSuccess(userToLogin);
-        } else {
-            setError('Username atau password salah.');
+    const email = `${username.toLowerCase()}@example.com`;
+    const theme = username.toLowerCase() === 'nauval' ? USERS.nauval.theme : USERS.mufel.theme;
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (signInError: any) {
+      if (signInError.code === AuthErrorCodes.USER_DELETED) { // 'auth/user-not-found'
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          // Create user profile document in Firestore
+          await setDoc(doc(db, 'users', userCredential.user.uid), {
+            username: username,
+            theme: theme,
+          });
+          // Login will be handled by onAuthStateChanged in App.tsx
+        } catch (signUpError: any) {
+          setError(signUpError.message);
         }
-        setLoading(false);
-    }, 500); // Simulate network delay
+      } else if (signInError.code === AuthErrorCodes.INVALID_PASSWORD) { // 'auth/wrong-password'
+          setError('Username atau password salah.');
+      } else {
+        setError('Username atau password salah.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,7 +71,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="nauval / mufel"
               autoComplete="username"
-              disabled={loading}
             />
           </div>
           <div>
@@ -68,13 +83,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
               autoComplete="current-password"
-              disabled={loading}
             />
           </div>
           
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400" disabled={loading}>
+          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
