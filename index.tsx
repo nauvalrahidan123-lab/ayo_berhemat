@@ -14,17 +14,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
-// Register Service Worker using a stable, absolute path
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // Using a direct path is more reliable than dynamic imports that may fail in some build environments.
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {
-        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-      })
-      .catch(error => {
-        console.log('ServiceWorker registration failed: ', error);
-      });
-  });
-}
