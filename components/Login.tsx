@@ -3,8 +3,7 @@ import React, { useState } from 'react';
 import { auth, db } from '../firebase';
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  AuthErrorCodes
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { USERS } from '../constants';
@@ -32,7 +31,8 @@ const Login: React.FC = () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (signInError: any) {
-      if (signInError.code === AuthErrorCodes.USER_DELETED) { // 'auth/user-not-found'
+      // If sign-in fails because the user doesn't exist, create a new account.
+      if (signInError.code === 'auth/user-not-found') {
         try {
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           // Create user profile document in Firestore
@@ -44,10 +44,10 @@ const Login: React.FC = () => {
         } catch (signUpError: any) {
           setError(signUpError.message);
         }
-      } else if (signInError.code === AuthErrorCodes.INVALID_PASSWORD) { // 'auth/wrong-password'
+      } else if (signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
           setError('Username atau password salah.');
       } else {
-        setError('Username atau password salah.');
+        setError('Terjadi error. Silakan coba lagi.');
       }
     } finally {
       setLoading(false);
