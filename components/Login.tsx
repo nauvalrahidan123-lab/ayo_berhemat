@@ -20,7 +20,7 @@ const Login: React.FC = () => {
     setLoading(true);
 
     if (!username || !password) {
-      setError('Username and password are required.');
+      setError('Username dan password wajib diisi.');
       setLoading(false);
       return;
     }
@@ -31,28 +31,37 @@ const Login: React.FC = () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (signInError: any) {
-      // If sign-in fails because the user doesn't exist, create a new account.
-      if (signInError.code === 'auth/user-not-found') {
-        try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          // Create user profile document in Firestore
-          await setDoc(doc(db, 'users', userCredential.user.uid), {
-            username: username,
-            theme: theme,
-          });
-          // Login will be handled by onAuthStateChanged in App.tsx
-        } catch (signUpError: any) {
-          setError(signUpError.message);
-        }
-      } else if (signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
+      // Logic untuk menangani berbagai jenis error login
+      switch (signInError.code) {
+        case 'auth/user-not-found':
+          // Jika pengguna tidak ditemukan, buat akun baru (fitur daftar otomatis)
+          try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            await setDoc(doc(db, 'users', userCredential.user.uid), {
+              username: username,
+              theme: theme,
+            });
+            // onAuthStateChanged akan menangani login setelah ini
+          } catch (signUpError: any) {
+            setError('Gagal membuat akun baru. Silakan coba lagi.');
+            console.error("Sign Up Error:", signUpError);
+          }
+          break;
+        
+        case 'auth/wrong-password':
+        case 'auth/invalid-credential':
           setError('Username atau password salah.');
-      } else if (signInError.code === 'auth/operation-not-allowed') {
+          break;
+
+        case 'auth/operation-not-allowed':
           setError('Metode login Email/Password belum diaktifkan di Firebase.');
           console.error("Firebase Auth Error: Pastikan metode sign-in Email/Password sudah diaktifkan di Firebase Console.", signInError);
-      }
-      else {
-        setError('Terjadi error. Silakan coba lagi.');
-        console.error("Login Error:", signInError);
+          break;
+
+        default:
+          setError('Terjadi error yang tidak diketahui. Silakan coba lagi.');
+          console.error("Login Error:", signInError);
+          break;
       }
     } finally {
       setLoading(false);
@@ -91,14 +100,14 @@ const Login: React.FC = () => {
             />
           </div>
           
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          {error && <p className="text-red-500 text-sm text-center font-semibold">{error}</p>}
 
           <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Masuk...' : 'Masuk'}
           </button>
         </form>
          <div className="text-xs text-gray-400 mt-6 text-center">
-            <p>Hint: 061106 / 060703</p>
+            <p>Hint Password: 061106 / 060703</p>
         </div>
       </div>
     </div>
