@@ -1,6 +1,6 @@
-
 /// <reference lib="webworker" />
-// FIX: Removed the redeclaration of 'self'. The 'webworker' lib reference correctly types the global 'self' variable for the service worker scope, resolving the compilation errors.
+// FIX: Explicitly declare `self` as `ServiceWorkerGlobalScope` to fix type inference issues.
+declare const self: ServiceWorkerGlobalScope;
 
 // Service worker ini sengaja dibiarkan minimalis.
 // Tujuan utamanya adalah agar file ini ada dan dapat didaftarkan untuk mencegah error 404
@@ -13,7 +13,7 @@ self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', (event: ExtendableEvent) => {
   console.log('Service Worker: Activate');
   // Mengambil alih kontrol semua klien (tab) yang terbuka segera setelah service worker aktif.
   event.waitUntil(self.clients.claim());

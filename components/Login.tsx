@@ -46,8 +46,13 @@ const Login: React.FC = () => {
         }
       } else if (signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
           setError('Username atau password salah.');
-      } else {
+      } else if (signInError.code === 'auth/operation-not-allowed') {
+          setError('Metode login Email/Password belum diaktifkan di Firebase.');
+          console.error("Firebase Auth Error: Pastikan metode sign-in Email/Password sudah diaktifkan di Firebase Console.", signInError);
+      }
+      else {
         setError('Terjadi error. Silakan coba lagi.');
+        console.error("Login Error:", signInError);
       }
     } finally {
       setLoading(false);
