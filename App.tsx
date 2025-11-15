@@ -13,6 +13,7 @@ import TransactionForm from './components/TransactionForm';
 import AccountForm from './components/AccountForm';
 import BudgetForm from './components/BudgetForm';
 import TransferForm from './components/TransferForm';
+import FullPageLoader from './components/common/LoadingSpinner';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import {
@@ -299,7 +300,7 @@ const App: React.FC = () => {
     };
     
     if (loading) {
-        return <div className="min-h-screen bg-gray-100 flex justify-center items-center">Loading...</div>;
+        return <FullPageLoader message="Memverifikasi sesi Anda..." />;
     }
 
     if (!firebaseUser) {
@@ -307,7 +308,7 @@ const App: React.FC = () => {
     }
     
     if (!userProfile) {
-         return <div className="min-h-screen bg-gray-100 flex justify-center items-center">Loading Profile...</div>;
+         return <FullPageLoader message="Memuat profil pengguna..." />;
     }
 
     return (
